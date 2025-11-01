@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Happy Forever</title>
+  <style>
+    html, body { margin:0; height:100%; background:transparent; font-family:"Microsoft YaHei", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Hiragino Sans GB", sans-serif; color:#eee; overflow:hidden; }
+    #tips-layer { position:fixed; left:0; top:0; width:100%; height:100%; pointer-events:none; }
+    .tip { position:absolute; width:220px; height:50px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:#000; box-shadow:0 4px 12px rgba(0,0,0,.25); pointer-events:auto; z-index:1000; user-select:none; }#question-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:2000; }
+    #question-backdrop.show { display:flex; }
+    #question { background:#fff; color:#000; border-radius:16px; width:400px; padding:24px 24px 12px; box-shadow:0 12px 40px rgba(0,0,0,.4); text-align:center; }
+    #question h1 { margin:0 0 16px; font-size:22px; }
+    .btn-row { display:flex; gap:20px; justify-content:center; margin:16px 0 8px; }
+    .btn { appearance:none; border:0; border-radius:10px; padding:10px 16px; font-size:16px; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(0,0,0,.2); }
+    .btn-yes { background:#7ee27e; }
+    .btn-no  { background:#ff8080; }
+
+    #canvas-wrap { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; z-index:1500; }
+    #heartCanvas { width:840px; height:680px; image-rendering: pixelated; }</style>
+
+<style id="sakura-theme">
+  :root{
+    --sakura-50:#fff0f6;
+    --sakura-100:#ffe6f0;
+    --sakura-200:#ffd5e5;
+    --sakura-300:#ffbdd6;
+    --sakura-400:#ff9fc1;
+    --sakura-500:#f57aa8;
+    --sakura-600:#e26398;
+    --sakura-text:#7a2f47;
+    --card-bg:#ffffff;
+  }
+  /* 背景改为樱花粉渐变 */
+  html, body{
+    height:100%;
+    background:
+      radial-gradient(1200px 700px at 15% -10%, var(--sakura-50), transparent 70%),
+      radial-gradient(1200px 700px at 110% 0%,  var(--sakura-100), transparent 70%),
+      linear-gradient(180deg, var(--sakura-50) 0%, var(--sakura-100) 40%, var(--sakura-200) 100%);
+    background-attachment: fixed;
+    color: var(--sakura-text);
+  }
+  /* 飘落樱花容器（置底） */
+  #sakuraContainer{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    overflow:hidden;
+    z-index: 0;
+  }
+  /* 花瓣形状与动画 */
+  .sakura{
+    position:absolute;
+    left:0;
+    top:-10vh;
+    width:14px;
+    height:12px;
+    background: var(--sakura-300);
+    border-radius: 15px 3px 15px 3px / 12px 10px 12px 10px;
+    box-shadow: 0 0 6px rgba(255,175,200,.45);
+    opacity:.85;
+    transform: rotate(45deg);
+    animation-name: sakuraFall, sakuraSway;
+    animation-timing-function: linear, ease-in-out;
+    animation-iteration-count: infinite, infinite;
+    will-change: transform, margin-left;
+  }
+  @keyframes sakuraFall{
+    0%   { transform: translateY(-10vh) rotate(45deg); }
+    100% { transform: translateY(110vh) rotate(405deg); }
+  }
+  @keyframes sakuraSway{
+    0%   { margin-left: 0; }
+    50%  { margin-left: 40px; }
+    100% { margin-left: 0; }
+  }
+
+  /* 覆盖原样式：提示卡片色与文字 */
+  .tip{
+    color: var(--sakura-text) !important;
+    border: 1px solid var(--sakura-300);
+    box-shadow: 0 6px 18px rgba(230,120,160,.18);
+    font-weight: 600;
+  }
+
+  /* 弹窗与按钮配色 */
+  #question-backdrop{
+    background: rgba(255, 192, 203, .25) !important; /* 淡粉遮罩 */
+  }
+  #question{
+    background: var(--card-bg) !important;
+    color: var(--sakura-text) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 18px 50px rgba(220, 110, 150, .25) !important;
+  }
+  .btn{
+    color:#fff !important;
+  }
+  .btn-yes{ background: var(--sakura-500) !important; }
+  .btn-no { background: #f2a1a1 !important; }
+
+  /* 画布层透明以露出粉色背景 */
+  #canvas-wrap{
+    background: transparent !important;
+    z-index: 1;  /* 主内容高于花瓣 */
+  }
+  #tips-layer{ z-index: 2; } /* 提示在上层 */
+</style>
+
+
+</head>
+<body>
+  <div id="sakuraContainer" aria-hidden="true"></div>
+
+  <div id="tips-layer"></div>
+
+  <div id="question-backdrop" role="dialog" aria-modal="true">
+    <div id="question">
+      <h1>未来的日子请一直相互在彼此身边呀！</h1>
+      <div class="btn-row">
+        <button class="btn btn-yes" id="btnYes">愿意</button>
+        <button class="btn btn-no" id="btnNo">不愿意</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="heartCanvas" width="840" height="680"></canvas>
+  </div><script>
+  (() => {
+    // —— 与原 Python 版本一致的常量 ——
+    const totalWindows = 80;
+    const windowW = 220, windowH = 50;
+    const CANVAS_WIDTH = 840, CANVAS_HEIGHT = 680;
+    const CENTER_X = CANVAS_WIDTH/2, CENTER_Y = CANVAS_HEIGHT/2;
+    const IMAGE_ENLARGE = 11;
+    const HEART_COLOR = "#ff2d2d";
+
+    const tips = [
+  '今天也要开心呀',
+  '记得好好吃饭',
+  '多喝热水哦',
+  '早点休息呀',
+  '天凉加衣',
+  '出门带伞',
+  '注意保暖',
+  '别久坐哦',
+  '起来伸展下',
+  '护眼休息会',
+  '别熬夜啦',
+  '午后小憩下',
+  '晚安好梦',
+  '早安阳光',
+  '记得吃早餐',
+  '下雨路滑小心',
+  '路上注意安全',
+  '到家报个平安',
+  '多吃蔬果',
+  '少糖少辣',
+  '今天也要喝水',
+  '保持微笑呀',
+  '抱抱你',
+  '想你啦',
+  '我在呢',
+  '不要为难自己',
+  '慢慢来不着急',
+  '一切都会好',
+  '给自己放松一下',
+  '深呼吸一下',
+  '晒晒太阳呀',
+  '听听喜欢的歌',
+  '好好爱自己',
+  '记得吃水果',
+  '保持好心情',
+  '愿你被温柔以待',
+  '愿心愿成真',
+  '好运一直在',
+  '万事顺意',
+  '心想事成',
+  '岁岁平安',
+  '四季安然',
+  '平安喜乐',
+  '顺顺利利',
+  '事事称心',
+  '笑口常开',
+  '星河温柔',
+  '今晚好眠',
+  '睡前少玩手机',
+  '早睡早起',
+  '按时运动哦',
+  '记得拉伸',
+  '注意颈椎',
+  '护腰很重要',
+  '多走走路',
+  '喝点温水',
+  '别空腹哦',
+  '别忘防晒',
+  '风大戴帽',
+  '围条围巾吧',
+  '多穿一件',
+  '出门顺利呀',
+  '旅途顺利',
+  '一路平安',
+  '拍照要好看',
+  '山海等你',
+  '今天也要勇敢',
+  '稳住心态',
+  '你一定行',
+  '你很棒呀',
+  '继续发光',
+  '温柔且坚定',
+  '热爱不会迟到',
+  '耐心会开花',
+  '小事慢慢做',
+  '一步一步来',
+  '别和自己较劲',
+  '放过完美主义',
+  '给自己一个笑',
+  '接纳不完美',
+  '今天也要自信',
+  '专注当下',
+  '心里装点光',
+  '好运会眷顾你',
+  '惊喜在路上',
+  '回复不用急',
+  '常联系呀',
+  '等你消息',
+  '想见你',
+  '下次见面吧',
+  '周末见呀',
+  '一起吃饭吧',
+  '保持小小期待',
+  '给自己奖励',
+  '喜欢就去做',
+  '别害怕开始',
+  '拥抱变化',
+  '温柔以待自己',
+  '为你加油',
+  '今天顺利',
+  '明天更好',
+  '午餐要吃饱',
+  '晚上少油腻',
+  '多喝点汤',
+  '记得带伞',
+  '别感冒哦',
+  '穿你喜欢的',
+  '做让你快乐的',
+  '保持节奏',
+  '别忘了微笑',
+  '善待情绪',
+  '勇敢表达',
+  '学会说不',
+  '学会求助',
+  '相信自己',
+  '世界温柔着呢',
+  '你被看见了',
+  '你值得被爱',
+  '你值得更好',
+  '你的努力被看见',
+  '别否定自己',
+  '保持好奇心',
+  '保持热爱',
+  '心里装着光',
+  '做自己的太阳',
+  '早点起床晒光',
+  '晚风会温柔',
+  '给明天留点力',
+  '今天就到这吧',
+  '适度就很好',
+  '喝杯热茶吧',
+  '读一页书',
+  '写两行字',
+  '走三分钟路',
+  '早睡十分钟',
+  '拥抱当下',
+  '不必逞强',
+  '允许休息',
+  '情绪会过去',
+  '把自己照顾好',
+  '别忘吃药哦',
+  '注意过敏源',
+  '多多保重',
+  '小心着凉',
+  '回家路顺',
+  '开会顺利',
+  '面试顺利',
+  '项目拿下',
+  '代码零bug',
+  '进展顺心',
+  '灵感会来',
+  '复盘很重要',
+  '写作顺利',
+  '投稿顺利',
+  '答辩顺心',
+  '金榜题名',
+  '复习顺利',
+  '做题顺手',
+  '保持节律',
+  '别打乱作息',
+  '手机放一会',
+  '多看看远方',
+  '闭目养神吧',
+  '去喝口水吧',
+  '添件外套',
+  '放慢一点',
+  '轻轻松松',
+  '别急别慌',
+  '我们都在',
+  '我一直在',
+  '你不孤单',
+  '给你力量',
+  '给你拥抱',
+  '愿你安睡',
+  '愿你常笑',
+  '愿你所愿皆得',
+  '愿你所行皆坦',
+  '愿你所遇皆甜',
+  '愿你日日欢喜',
+  '愿你不被辜负',
+  '愿你被世界温柔对待',
+  '小确幸会来',
+  '好运在拐角',
+  '惊喜在前方',
+  '今日份温柔',
+  '天空很蓝哦',
+  '云也在等你',
+  '风也很轻',
+  '花会开呀',
+  '月亮好圆',
+  '星星在眨眼',
+  '万事都有解',
+  '别怕慢',
+  '别回头',
+  '向前看',
+  '轻装上阵',
+  '收拾好心情',
+  '出发吧',
+  '好梦会来',
+  '好事会来',
+  '好人会来',
+  '拥抱美好',
+  '照顾情绪',
+  '记得快乐',
+  '珍惜自己',
+  '保持联系',
+  '期待相见'
+];
+    const bgColors = ['#ffeef5','#ffd9e6','#ffc9dc','#ffb3cf','#ff9fc1','#ff8ab5','#ffd5e5','#ffe6ef','#ffd1e8'];
+
+    const tipsLayer = document.getElementById('tips-layer');
+    const questionBackdrop = document.getElementById('question-backdrop');
+    const btnYes = document.getElementById('btnYes');
+    const btnNo = document.getElementById('btnNo');
+    const canvasWrap = document.getElementById('canvas-wrap');
+    const canvas = document.getElementById('heartCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let screenW = window.innerWidth;
+    let screenH = window.innerHeight;
+    let currentTip = 0;
+    const tipWindows = [];
+
+    function heartFunctionTips(t, scale=25) {
+      const x = 16 * Math.sin(t)**3;
+      const y = -(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+      let px = x*scale + (screenW>>1);
+      let py = y*scale + Math.floor(screenH/3);
+      // 保证视口内
+      px = Math.max(0, Math.min(px, screenW - windowW));
+      py = Math.max(0, Math.min(py, screenH - windowH));
+      return [px|0, py|0];
+    }
+
+    function makeTip(i) {
+      const tip = document.createElement('div');
+      tip.className = 'tip';
+      tip.style.background = bgColors[i % bgColors.length];
+      tip.innerHTML = `${tips[i % tips.length]}`;
+      const t = 2*Math.PI * i / totalWindows;
+      const [x, y] = heartFunctionTips(t, 25);
+      tip.style.left = x + 'px';
+      tip.style.top  = y + 'px';
+      tipsLayer.appendChild(tip);
+      tipWindows.push(tip);
+    }
+
+    function showNextTip() {
+      if (currentTip < totalWindows) {
+        makeTip(currentTip);
+        currentTip++;
+        setTimeout(showNextTip, 200); // 与原逻辑一致
+      } else {
+        setTimeout(() => questionBackdrop.classList.add('show'), 2000);
+      }
+    }
+
+    // —— 心形动画 ——
+    function heartFunctionAnimation(t, shrinkRatio=IMAGE_ENLARGE) {
+      let x = 17 * Math.sin(t)**3;
+      let y = -(16*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(3*t));
+      x *= IMAGE_ENLARGE; y *= IMAGE_ENLARGE;
+      x += CENTER_X; y += CENTER_Y;
+      return [x|0, y|0];
+    }
+    function scatterInside(x, y, beta=0.15) {
+      const ratio_x = -beta * Math.log(1 - Math.random());
+      const ratio_y = -beta * Math.log(1 - Math.random());
+      const dx = ratio_x * (x - CENTER_X);
+      const dy = ratio_y * (y - CENTER_Y);
+      return [x - dx, y - dy];
+    }
+    function shrink(x,y,ratio) {
+      const force = -1 / Math.pow(((x-CENTER_X)**2 + (y-CENTER_Y)**2), 0.6);
+      const dx = ratio * force * (x - CENTER_X);
+      const dy = ratio * force * (y - CENTER_Y);
+      return [x - dx, y - dy];
+    }
+    function curve(p) { return 2 * (2 * Math.sin(4*p)) / (2*Math.PI); }
+    function randInt(a,b){ return (Math.random()*(b-a+1) + a)|0; }
+
+    class Heart {
+      constructor(generateFrame=20) {
+        this.points = new Set();
+        this.edge = new Set();
+        this.center = new Set();
+        this.allPoints = new Array(generateFrame);
+        this.generateFrame = generateFrame;
+        this._build(2000);
+        for (let f=0; f<generateFrame; f++) this._calc(f);
+      }
+      _key(x,y){ return (x|0)+','+(y|0); }
+
+      _build(number) {
+        for (let i=0;i<number;i++) {
+          const t = Math.random()*Math.PI*2;
+          const [x,y] = heartFunctionAnimation(t);
+          this.points.add(this._key(x,y));
+        }
+        const pts = Array.from(this.points).map(s=>s.split(',').map(Number));
+        // 边缘扩散
+        for (const [x0,y0] of pts) {
+          for (let k=0;k<3;k++){
+            const [x,y] = scatterInside(x0,y0,0.05);
+            this.edge.add(this._key(x,y));
+          }
+        }
+        // 中心扩散
+        for (let k=0;k<10000;k++){
+          const [sx,sy] = pts[randInt(0, pts.length-1)];
+          const [x,y] = scatterInside(sx,sy,0.27);
+          this.center.add(this._key(x,y));
+        }
+        this.pointsArr = Array.from(this.points).map(s=>s.split(',').map(Number));
+        this.edgeArr   = Array.from(this.edge).map(s=>s.split(',').map(Number));
+        this.centerArr = Array.from(this.center).map(s=>s.split(',').map(Number));
+      }
+
+      static calcPosition(x,y,ratio) {
+        const force = 1 / Math.pow(((x - CENTER_X)**2 + (y - CENTER_Y)**2), 0.420);
+        const dx = ratio * force * (x - CENTER_X) + randInt(-1,1);
+        const dy = ratio * force * (y - CENTER_Y) + randInt(-1,1);
+        return [x - dx, y - dy];
+      }
+
+      _calc(frame) {
+        const ratio = 15 * curve(frame/10 * Math.PI);
+        const haloRadius = (4 + 6 * (1 + curve(frame/10 * Math.PI)))|0;
+        const haloNumber = (3000 + 4000 * Math.abs(curve(frame/10 * Math.PI)**2))|0;
+
+        const all = [];
+        // 光环
+        const haloSet = new Set();
+        for (let i=0;i<haloNumber;i++){
+          const t = Math.random()*Math.PI*2;
+          let [x,y] = heartFunctionAnimation(t, -15);
+          [x,y] = shrink(x,y,haloRadius);
+          const key = (x|0)+','+(y|0);
+          if (!haloSet.has(key)) {
+            haloSet.add(key);
+            x += randInt(-60,60); y += randInt(-60,60);
+            const size = [1,1,2][randInt(0,2)];
+            all.push([x,y,size]);
+            all.push([x+20,y+20,size]);
+            all.push([x-20,y-20,size]);
+            all.push([x+20,y-20,size]);
+            all.push([x-20,y+20,size]);
+          }
+        }
+        // 轮廓
+        for (let i=0;i<this.pointsArr.length;i++){
+          let [x,y] = this.pointsArr[i];
+          [x,y] = Heart.calcPosition(x,y,ratio);
+          const size = randInt(1,3);
+          all.push([x,y,size]);
+        }
+        // 内容（边缘扩散）
+        for (let i=0;i<this.edgeArr.length;i++){
+          let [x,y] = this.edgeArr[i];
+          [x,y] = Heart.calcPosition(x,y,ratio);
+          const size = randInt(1,2);
+          all.push([x,y,size]);
+        }
+        // 内容（中心扩散）
+        for (let i=0;i<this.centerArr.length;i++){
+          let [x,y] = this.centerArr[i];
+          [x,y] = Heart.calcPosition(x,y,ratio);
+          const size = randInt(1,2);
+          all.push([x,y,size]);
+        }
+        this.allPoints[frame] = all;
+      }
+
+      render(frame) {
+        const data = this.allPoints[frame % this.generateFrame];
+        ctx.clearRect(0,0,CANVAS_WIDTH,CANVAS_HEIGHT);
+        ctx.fillStyle = HEART_COLOR;
+        for (let i=0;i<data.length;i++) {
+          const [x,y,s] = data[i];
+          ctx.fillRect(x, y, s, s);
+        }
+      }
+    }
+
+    function startHeartAnimation() {
+  canvasWrap.style.display = 'flex';
+  const heart = new Heart(20); // 预生成 20 帧
+
+  // —— 一开始就放慢心跳：使用固定较慢的帧间隔 ——
+  let frame = 0;
+  let last = 0;
+  const interval = 180; // 毫秒；约 ~7fps，可按需改 100~180
+
+  function tick(ts){
+    if (ts - last >= interval) {
+      heart.render(frame++);
+      last = ts;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+    // —— 交互 ——
+    btnYes.addEventListener('click', () => {
+      for (const el of tipWindows) el.remove();
+      questionBackdrop.classList.remove('show');
+      startHeartAnimation();
+    });
+    btnNo.addEventListener('click', () => {
+      // 网页无法直接“退出程序”，用淡出替代
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#bbb;font:600 20px/1.4 system-ui">已退出</div>';
+    });
+
+    window.addEventListener('resize', () => {
+      screenW = window.innerWidth; screenH = window.innerHeight;
+    });
+
+    // 启动
+    console.log(`将在屏幕上创建一个包含 ${totalWindows} 个窗口的爱心轨迹...`);
+    showNextTip();
+  })();
+  </script>
+
+<script id="sakura-script">
+(function () {
+  const N = 42; // 花瓣数量，想更密可调大
+  let wrap = document.getElementById('sakuraContainer');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'sakuraContainer';
+    wrap.setAttribute('aria-hidden','true');
+    document.body.prepend(wrap);
+  }
+  for (let i = 0; i < N; i++) {
+    const s = document.createElement('span');
+    s.className = 'sakura';
+    const left = Math.random() * 100;                // vw
+    const size = 0.6 + Math.random() * 0.9;         // 0.6 ~ 1.5
+    const fall = 9000 + Math.random() * 11000;      // 9s ~ 20s
+    const sway = 3000 + Math.random() * 3000;       // 3s ~ 6s
+    const delay = (Math.random() * -8000) | 0;      // 负延迟用于打散
+    s.style.left = left + 'vw';
+    s.style.animationDuration = fall + 'ms, ' + sway + 'ms';
+    s.style.animationDelay = delay + 'ms, ' + (delay/2) + 'ms';
+    s.style.transform = 'rotate(45deg) scale(' + size + ')';
+    if (Math.random() < 0.30) s.style.background = 'var(--sakura-400)';
+    if (Math.random() < 0.15) s.style.opacity = 0.75;
+    wrap.appendChild(s);
+  }
+})();
+</script>
+
+
+
+<!-- NetEase piano track embed: autoplay background, hidden -->
+<iframe
+  id="netease-bgm"
+  title="Background Piano"
+  src="https://music.163.com/outchain/player?type=2&id=1884809176&auto=1&height=66"
+  frameborder="0"
+  allow="autoplay"
+  style="position:fixed; left:-9999px; width:0; height:0; opacity:0; pointer-events:none; border:0;"
+></iframe>
+
+</body>
+</html>
